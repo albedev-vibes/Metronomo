@@ -50,7 +50,6 @@
         button {
             width: 100%;
             padding: 12px;
-            background: #00adb5;
             border: none;
             color: white;
             font-weight: bold;
@@ -59,7 +58,10 @@
             font-size: 1.1rem;
             margin-top: 10px;
         }
-        button:hover { background: #007c82; }
+        .btn-start { background: #00adb5; }
+        .btn-start:hover { background: #007c82; }
+        .btn-calib { background: #ff9800; }
+        .btn-calib:hover { background: #e68a00; }
 
         /* Schermata Flash */
         #flash-screen {
@@ -99,11 +101,11 @@
         <div class="control-group">
             <label>Ruolo del dispositivo:</label>
             <select id="phone-id" onchange="checkRole()">
+                <option value="regia">REGIA (Solo parametri)</option>
                 <option value="1">Dispositivo 1</option>
                 <option value="2">Dispositivo 2</option>
                 <option value="3">Dispositivo 3</option>
                 <option value="4">Dispositivo 4</option>
-                <option value="regia">REGIA (Solo parametri)</option>
             </select>
         </div>
 
@@ -129,7 +131,8 @@
             <input type="number" id="sync-offset" value="0" step="10">
         </div>
 
-        <button onclick="startMetronome()">AVVIA METRONOMO</button>
+        <button class="btn-calib" onclick="startEngine(true)">MODE CALIBRAZIONE</button>
+        <button class="btn-start" onclick="startEngine(false)">AVVIA METRONOMO</button>
     </div>
 
     <!-- SCHERMATA DI LAMPEGGIAMENTO -->
@@ -143,7 +146,6 @@
         let isRunning = false;
         let audioCtx = null;
 
-        // Riproduce un Click acustico tramite Web Audio API
         function playClick(pitch = 800) {
             try {
                 if (!audioCtx) {
@@ -170,14 +172,15 @@
         function checkRole() {
             const role = document.getElementById('phone-id').value;
             const regiaControls = document.getElementById('regia-controls');
-            regiaControls.style.display = 'block';
+            // Mostra i controlli solo se è impostato su "REGIA"
+            regiaControls.style.display = (role === 'regia') ? 'block' : 'none';
         }
 
-        function startMetronome() {
+        function startEngine(isCalibrationMode = false) {
             const role = document.getElementById('phone-id').value;
 
             if (role === 'regia') {
-                alert("Imposta questo dispositivo come 'Dispositivo 1', '2', '3' ecc. per vedere i flash visivi.");
+                alert("Seleziona 'Dispositivo 1', '2', '3' ecc. per attivare il display visivo.");
                 return;
             }
 
@@ -201,20 +204,26 @@
 
                 const now = Date.now() + syncOffset;
                 const absoluteBeat = Math.floor(now / beatDuration);
-                
-                // Beat corrente della misura (es. da 1 a 4)
                 const currentBeatInMeasure = (absoluteBeat % num) + 1;
-
-                // Rotazione sequenziale completa tra tutti i dispositivi
                 const targetPhone = (absoluteBeat % totalPhones) + 1;
 
                 const timeInCurrentBeat = now % beatDuration;
                 const isFlashActive = timeInCurrentBeat < (beatDuration * 0.35);
 
-                if (currentPhone === targetPhone && isFlashActive) {
+                // In modalità Calibrazione tutti i dispositivi si attivano sempre.
+                // In modalità Metronomo si attiva solo il telefono corrente.
+                const shouldActivate = isCalibrationMode || (currentPhone === targetPhone);
+
+                if (shouldActivate && isFlashActive) {
                     const isFirstBeat = (currentBeatInMeasure === 1);
-                    flashScreen.style.backgroundColor = isFirstBeat ? '#ff0055' : '#ffcc00';
-                    document.getElementById('info-overlay').innerHTML = `BEAT: ${currentBeatInMeasure}<br><span style="font-size:1.2rem">DISPOSITIVO ${currentPhone}</span>`;
+                    
+                    if (isCalibrationMode) {
+                        flashScreen.style.backgroundColor = '#00e676'; // Verde acceso per Calibrazione
+                        document.getElementById('info-overlay').innerHTML = `CALIBRAZIONE<br><span style="font-size:1.2rem">BEAT: ${currentBeatInMeasure}</span>`;
+                    } else {
+                        flashScreen.style.backgroundColor = isFirstBeat ? '#ff0055' : '#ffcc00';
+                        document.getElementById('info-overlay').innerHTML = `BEAT: ${currentBeatInMeasure}<br><span style="font-size:1.2rem">DISPOSITIVO ${currentPhone}</span>`;
+                    }
 
                     if (lastBeatPlayed !== absoluteBeat) {
                         playClick(isFirstBeat ? 1200 : 800);
@@ -222,7 +231,8 @@
                     }
                 } else {
                     flashScreen.style.backgroundColor = '#111';
-                    document.getElementById('info-overlay').innerHTML = `...<br><span style="font-size:1.2rem; color:#666;">In attesa (Beat ${currentBeatInMeasure})</span>`;
+                    const modeText = isCalibrationMode ? 'Calibrazione...' : `In attesa (Beat ${currentBeatInMeasure})`;
+                    document.getElementById('info-overlay').innerHTML = `...<br><span style="font-size:1.2rem; color:#666;">${modeText}</span>`;
                 }
 
                 animationFrameId = requestAnimationFrame(updateLoop);
@@ -237,6 +247,9 @@
             document.getElementById('flash-screen').style.display = 'none';
             document.getElementById('setup-interface').style.display = 'block';
         }
+
+        // Inizializza la visualizzazione corretta dei controlli all'avvio
+        checkRole();
     </script>
 </body>
 </html>
