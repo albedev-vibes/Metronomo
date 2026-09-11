@@ -63,15 +63,16 @@
 
         /* Schermata Flash */
         #flash-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
             display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            z-index: 100;
         }
         #info-overlay {
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: bold;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             text-align: center;
@@ -79,10 +80,13 @@
         .back-btn {
             position: absolute;
             top: 20px; left: 20px;
-            background: rgba(0,0,0,0.5);
-            padding: 8px 15px;
-            font-size: 0.8rem;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            font-size: 1rem;
             width: auto;
+            color: white;
+            border: 1px solid #666;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -93,19 +97,19 @@
         <h2>Configurazione</h2>
 
         <div class="control-group">
-            <label>Ruolo di questo Telefono:</label>
+            <label>Ruolo del dispositivo:</label>
             <select id="phone-id" onchange="checkRole()">
-                <option value="regia">REGIA (Imposta i comandi)</option>
-                <option value="1">Telefono 1 (Primo Beat - Accento)</option>
-                <option value="2">Telefono 2</option>
-                <option value="3">Telefono 3</option>
-                <option value="4">Telefono 4</option>
+                <option value="1">Telefono / PC 1 (Primo Beat - Accento)</option>
+                <option value="2">Telefono / PC 2</option>
+                <option value="3">Telefono / PC 3</option>
+                <option value="4">Telefono / PC 4</option>
+                <option value="regia">REGIA (Solo parametri)</option>
             </select>
         </div>
 
         <div id="regia-controls">
             <div class="control-group">
-                <label>Tempo (Numeratore):</label>
+                <label>Tempo (Battiti per misura):</label>
                 <input type="number" id="time-num" value="4" min="1" max="16">
             </div>
 
@@ -115,14 +119,14 @@
             </div>
 
             <div class="control-group">
-                <label>Numero totale Telefoni in uso:</label>
+                <label>Numero totale Dispositivi:</label>
                 <input type="number" id="total-phones" value="2" min="1" max="10">
             </div>
         </div>
 
         <div class="control-group">
             <label>Calibrazione Sync (ms +/-):</label>
-            <input type="number" id="sync-offset" value="0" step="50">
+            <input type="number" id="sync-offset" value="0" step="10">
         </div>
 
         <button onclick="startMetronome()">AVVIA METRONOMO</button>
@@ -130,25 +134,51 @@
 
     <!-- SCHERMATA DI LAMPEGGIAMENTO -->
     <div id="flash-screen">
-        <button class="back-btn" onclick="stopMetronome()">⚙ Esci</button>
-        <div id="info-overlay">Attendendo il tempo...</div>
+        <button class="back-btn" onclick="stopMetronome()">⚙ Esci / Stop</button>
+        <div id="info-overlay">Inizializzazione...</div>
     </div>
 
     <script>
         let animationFrameId;
         let isRunning = false;
+        let audioCtx = null;
+
+        // Funzione per generare un segnale acustico (Click) via Web Audio API
+        function playClick(pitch = 800) {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(pitch, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+            } catch (e) {
+                console.log("Audio non supportato o bloccato:", e);
+            }
+        }
 
         function checkRole() {
             const role = document.getElementById('phone-id').value;
             const regiaControls = document.getElementById('regia-controls');
-            regiaControls.style.display = (role === 'regia') ? 'block' : 'none';
+            // La configurazione resta visibile per permettere la modifica dei parametri
+            regiaControls.style.display = 'block';
         }
 
         function startMetronome() {
             const role = document.getElementById('phone-id').value;
 
             if (role === 'regia') {
-                alert("Imposta questo telefono come 'Telefono 1', 'Telefono 2' ecc. La Regia serve solo per definire i parametri.");
+                alert("Attenzione: imposta il dispositivo come 'Telefono / PC 1', '2' ecc. per vedere l'effetto visivo.");
                 return;
             }
 
@@ -165,11 +195,11 @@
 
             const beatDuration = (60 / bpm) * 1000;
             isRunning = true;
+            let lastBeatPlayed = -1;
 
             function updateLoop() {
                 if (!isRunning) return;
 
-                // Calcolo tempo sincronizzato con aggiunta dell'offset manuale
                 const now = Date.now() + syncOffset;
                 const absoluteBeat = Math.floor(now / beatDuration);
                 const currentBeatInMeasure = (absoluteBeat % num) + 1;
@@ -179,16 +209,22 @@
                     targetPhone = totalPhones;
                 }
 
-                // Determina la fase del battito corrente (da 0.0 a 1.0)
                 const timeInCurrentBeat = now % beatDuration;
-                const isFlashActive = timeInCurrentBeat < (beatDuration * 0.3); // Flash per il primo 30% del battito
+                const isFlashActive = timeInCurrentBeat < (beatDuration * 0.35);
 
                 if (currentPhone === targetPhone && currentPhone <= totalPhones && isFlashActive) {
-                    flashScreen.style.backgroundColor = (currentBeatInMeasure === 1) ? '#ff0055' : '#ffcc00';
-                    document.getElementById('info-overlay').innerHTML = `BEAT: ${currentBeatInMeasure}<br>TELEFONO: ${currentPhone}`;
+                    const isFirstBeat = (currentBeatInMeasure === 1);
+                    flashScreen.style.backgroundColor = isFirstBeat ? '#ff0055' : '#ffcc00';
+                    document.getElementById('info-overlay').innerHTML = `BEAT: ${currentBeatInMeasure}<br><span style="font-size:1.2rem">DISPOSITIVO ${currentPhone}</span>`;
+
+                    // Riproduce il suono del click una sola volta per beat
+                    if (lastBeatPlayed !== absoluteBeat) {
+                        playClick(isFirstBeat ? 1200 : 800);
+                        lastBeatPlayed = absoluteBeat;
+                    }
                 } else {
                     flashScreen.style.backgroundColor = '#111';
-                    document.getElementById('info-overlay').innerHTML = `...<br><span style="font-size:1rem; color:#444;">In attesa del Beat</span>`;
+                    document.getElementById('info-overlay').innerHTML = `...<br><span style="font-size:1.2rem; color:#666;">In attesa (Beat ${currentBeatInMeasure})</span>`;
                 }
 
                 animationFrameId = requestAnimationFrame(updateLoop);
