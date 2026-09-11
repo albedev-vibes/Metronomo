@@ -69,7 +69,6 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            transition: background-color 0.05s ease-out;
         }
         #info-overlay {
             font-size: 2rem;
@@ -97,8 +96,7 @@
             <label>Ruolo di questo Telefono:</label>
             <select id="phone-id" onchange="checkRole()">
                 <option value="regia">REGIA (Imposta i comandi)</option>
-                <option value="1">Telefono 1 (Primo Beat -
-Accento)</option>
+                <option value="1">Telefono 1 (Primo Beat - Accento)</option>
                 <option value="2">Telefono 2</option>
                 <option value="3">Telefono 3</option>
                 <option value="4">Telefono 4</option>
@@ -107,29 +105,24 @@ Accento)</option>
 
         <div id="regia-controls">
             <div class="control-group">
-                <label>Tempo (Numeratore / Denominatore):</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="number" id="time-num" value="4"
-min="1" max="16">
-                    <span style="font-size: 1.5rem;">/</span>
-                    <select id="time-den">
-                        <option value="4">4</option>
-                        <option value="8">8</option>
-                    </select>
-                </div>
+                <label>Tempo (Numeratore):</label>
+                <input type="number" id="time-num" value="4" min="1" max="16">
             </div>
 
             <div class="control-group">
                 <label>BPM (Velocità):</label>
-                <input type="number" id="bpm" value="120" min="40"
-max="300">
+                <input type="number" id="bpm" value="120" min="40" max="300">
             </div>
 
             <div class="control-group">
                 <label>Numero totale Telefoni in uso:</label>
-                <input type="number" id="total-phones" value="2"
-min="1" max="10">
+                <input type="number" id="total-phones" value="2" min="1" max="10">
             </div>
+        </div>
+
+        <div class="control-group">
+            <label>Calibrazione Sync (ms +/-):</label>
+            <input type="number" id="sync-offset" value="0" step="50">
         </div>
 
         <button onclick="startMetronome()">AVVIA METRONOMO</button>
@@ -142,111 +135,73 @@ min="1" max="10">
     </div>
 
     <script>
-        let timerInterval;
+        let animationFrameId;
+        let isRunning = false;
 
-        // Controlla se mostrare i comandi di gestione o nasconderli
-nei telefoni client
         function checkRole() {
             const role = document.getElementById('phone-id').value;
-            const regiaControls =
-document.getElementById('regia-controls');
-            if (role === 'regia') {
-                regiaControls.style.display = 'block';
-            } else {
-                regiaControls.style.display = 'none';
-            }
+            const regiaControls = document.getElementById('regia-controls');
+            regiaControls.style.display = (role === 'regia') ? 'block' : 'none';
         }
 
         function startMetronome() {
             const role = document.getElementById('phone-id').value;
 
-            // Se è impostato su Regia, chiede quale numero di telefono
-è questo specifico dispositivo
             if (role === 'regia') {
-                alert("Per visualizzare i flash, imposta questo
-telefono come 'Telefono 1' o 'Telefono 2' ecc. La Regia serve solo per
-leggere i parametri da copiare sugli altri schermi.");
+                alert("Imposta questo telefono come 'Telefono 1', 'Telefono 2' ecc. La Regia serve solo per definire i parametri.");
                 return;
             }
 
             const currentPhone = parseInt(role);
-            const num =
-parseInt(document.getElementById('time-num').value);
+            const num = parseInt(document.getElementById('time-num').value);
             const bpm = parseInt(document.getElementById('bpm').value);
-            const totalPhones =
-parseInt(document.getElementById('total-phones').value);
+            const totalPhones = parseInt(document.getElementById('total-phones').value);
+            const syncOffset = parseInt(document.getElementById('sync-offset').value) || 0;
 
-            // Nascondi setup e mostra schermo flash
-            document.getElementById('setup-interface').style.display =
-'none';
+            document.getElementById('setup-interface').style.display = 'none';
             const flashScreen = document.getElementById('flash-screen');
             flashScreen.style.display = 'flex';
             flashScreen.style.backgroundColor = '#111';
 
-            // Calcolo durata del singolo battito in millisecondi
             const beatDuration = (60 / bpm) * 1000;
+            isRunning = true;
 
-            // Avvia il ciclo di controllo temporale continuo
-            timerInterval = setInterval(() => {
-                const now = Date.now();
+            function updateLoop() {
+                if (!isRunning) return;
 
-                // Determina in quale battito assoluto ci troviamo
-dall'inizio dei tempi Unix
+                // Calcolo tempo sincronizzato con aggiunta dell'offset manuale
+                const now = Date.now() + syncOffset;
                 const absoluteBeat = Math.floor(now / beatDuration);
-
-                // Trova la posizione del battito corrente all'interno
-della battuta attuale (da 0 a num-1)
                 const currentBeatInMeasure = (absoluteBeat % num) + 1;
 
-                // Calcola quale telefono deve illuminarsi per questo
-specifico battito
                 let targetPhone = currentBeatInMeasure;
-
-                // LOGICA DI ESTENSIONE: Se i battiti sono più dei
-telefoni, l'ultimo telefono si prende i beat rimanenti
                 if (currentBeatInMeasure > totalPhones) {
                     targetPhone = totalPhones;
                 }
 
-                // Verifica se questo telefono deve attivarsi
-                if (currentPhone === targetPhone && currentPhone <=
-totalPhones) {
-                    // Colore Rosso per il Primo Beat, Giallo Luminoso
-per gli altri beat
-                    if (currentBeatInMeasure === 1) {
-                        flashScreen.style.backgroundColor = '#ff0055';
-// Rosso Accento
-                    } else {
-                        flashScreen.style.backgroundColor = '#ffcc00';
-// Giallo Beat successivi
-                    }
-document.getElementById('info-overlay').innerHTML = `BEAT:
-${currentBeatInMeasure}<br>TELEFONO: ${currentPhone}`;
+                // Determina la fase del battito corrente (da 0.0 a 1.0)
+                const timeInCurrentBeat = now % beatDuration;
+                const isFlashActive = timeInCurrentBeat < (beatDuration * 0.3); // Flash per il primo 30% del battito
+
+                if (currentPhone === targetPhone && currentPhone <= totalPhones && isFlashActive) {
+                    flashScreen.style.backgroundColor = (currentBeatInMeasure === 1) ? '#ff0055' : '#ffcc00';
+                    document.getElementById('info-overlay').innerHTML = `BEAT: ${currentBeatInMeasure}<br>TELEFONO: ${currentPhone}`;
                 } else {
-                    flashScreen.style.backgroundColor = '#111'; //
-Schermo nero se spento o non tocca a lui
-document.getElementById('info-overlay').innerHTML = `...<br><span
-style="font-size:1rem; color:#444;">In attesa del Beat</span>`;
+                    flashScreen.style.backgroundColor = '#111';
+                    document.getElementById('info-overlay').innerHTML = `...<br><span style="font-size:1rem; color:#444;">In attesa del Beat</span>`;
                 }
 
-                // Spegnimento rapido a metà battito per creare
-l'effetto flash/impulso visivo netto
-                setTimeout(() => {
-                    if (flashScreen.style.backgroundColor !== 'rgb(17,
-17, 17)') {
-                        flashScreen.style.backgroundColor = '#111';
-                    }
-                }, beatDuration * 0.4);
+                animationFrameId = requestAnimationFrame(updateLoop);
+            }
 
-            }, 40); // Controllo ogni 40 millisecondi per massima
-precisione di calcolo
+            animationFrameId = requestAnimationFrame(updateLoop);
         }
 
         function stopMetronome() {
-            clearInterval(timerInterval);
+            isRunning = false;
+            cancelAnimationFrame(animationFrameId);
             document.getElementById('flash-screen').style.display = 'none';
-            document.getElementById('setup-interface').style.display =
-'block';
+            document.getElementById('setup-interface').style.display = 'block';
         }
     </script>
 </body>
