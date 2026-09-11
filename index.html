@@ -99,10 +99,10 @@
         <div class="control-group">
             <label>Ruolo del dispositivo:</label>
             <select id="phone-id" onchange="checkRole()">
-                <option value="1">Telefono / PC 1 (Primo Beat - Accento)</option>
-                <option value="2">Telefono / PC 2</option>
-                <option value="3">Telefono / PC 3</option>
-                <option value="4">Telefono / PC 4</option>
+                <option value="1">Dispositivo 1</option>
+                <option value="2">Dispositivo 2</option>
+                <option value="3">Dispositivo 3</option>
+                <option value="4">Dispositivo 4</option>
                 <option value="regia">REGIA (Solo parametri)</option>
             </select>
         </div>
@@ -119,8 +119,8 @@
             </div>
 
             <div class="control-group">
-                <label>Numero totale Dispositivi:</label>
-                <input type="number" id="total-phones" value="2" min="1" max="10">
+                <label>Numero totale Dispositivi in uso:</label>
+                <input type="number" id="total-phones" value="4" min="1" max="10">
             </div>
         </div>
 
@@ -143,7 +143,7 @@
         let isRunning = false;
         let audioCtx = null;
 
-        // Funzione per generare un segnale acustico (Click) via Web Audio API
+        // Riproduce un Click acustico tramite Web Audio API
         function playClick(pitch = 800) {
             try {
                 if (!audioCtx) {
@@ -163,14 +163,13 @@
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.05);
             } catch (e) {
-                console.log("Audio non supportato o bloccato:", e);
+                console.log("Audio non supportato:", e);
             }
         }
 
         function checkRole() {
             const role = document.getElementById('phone-id').value;
             const regiaControls = document.getElementById('regia-controls');
-            // La configurazione resta visibile per permettere la modifica dei parametri
             regiaControls.style.display = 'block';
         }
 
@@ -178,7 +177,7 @@
             const role = document.getElementById('phone-id').value;
 
             if (role === 'regia') {
-                alert("Attenzione: imposta il dispositivo come 'Telefono / PC 1', '2' ecc. per vedere l'effetto visivo.");
+                alert("Imposta questo dispositivo come 'Dispositivo 1', '2', '3' ecc. per vedere i flash visivi.");
                 return;
             }
 
@@ -202,22 +201,21 @@
 
                 const now = Date.now() + syncOffset;
                 const absoluteBeat = Math.floor(now / beatDuration);
+                
+                // Beat corrente della misura (es. da 1 a 4)
                 const currentBeatInMeasure = (absoluteBeat % num) + 1;
 
-                let targetPhone = currentBeatInMeasure;
-                if (currentBeatInMeasure > totalPhones) {
-                    targetPhone = totalPhones;
-                }
+                // Rotazione sequenziale completa tra tutti i dispositivi
+                const targetPhone = (absoluteBeat % totalPhones) + 1;
 
                 const timeInCurrentBeat = now % beatDuration;
                 const isFlashActive = timeInCurrentBeat < (beatDuration * 0.35);
 
-                if (currentPhone === targetPhone && currentPhone <= totalPhones && isFlashActive) {
+                if (currentPhone === targetPhone && isFlashActive) {
                     const isFirstBeat = (currentBeatInMeasure === 1);
                     flashScreen.style.backgroundColor = isFirstBeat ? '#ff0055' : '#ffcc00';
                     document.getElementById('info-overlay').innerHTML = `BEAT: ${currentBeatInMeasure}<br><span style="font-size:1.2rem">DISPOSITIVO ${currentPhone}</span>`;
 
-                    // Riproduce il suono del click una sola volta per beat
                     if (lastBeatPlayed !== absoluteBeat) {
                         playClick(isFirstBeat ? 1200 : 800);
                         lastBeatPlayed = absoluteBeat;
